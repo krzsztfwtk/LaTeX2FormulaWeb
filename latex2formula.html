@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>LaTeX to Formula Converter</title>
+<style>
+  body {
+    background-color: white;
+    color: black;
+    font-family: Arial, sans-serif;
+    margin: 20px;
+  }
+  .container {
+    max-width: 1000px;
+    margin: auto;
+    display: flex;
+    gap: 20px;
+  }
+  .main-area {
+    flex: 2;
+  }
+  .sidebar {
+    flex: 1;
+    border: 1px solid #ccc;
+    padding: 15px;
+    border-radius: 5px;
+    height: fit-content;
+  }
+  h1, h3 {
+    text-align: center;
+  }
+  label {
+    display: block;
+    margin-top: 10px;
+  }
+  textarea, input[type="text"] {
+    width: 100%;
+    font-size: 14px;
+    padding: 8px;
+    margin-top: 5px;
+    box-sizing: border-box;
+  }
+  button {
+    margin-top: 15px;
+    padding: 10px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <h1>LaTeX to Formula Converter</h1>
+  <div class="container">
+    <div class="main-area">
+      <label for="latexInput">Enter LaTeX code:</label>
+      <textarea id="latexInput" rows="6"></textarea>
+      <button id="convertBtn">Convert</button>
+      <label for="outputField">Result:</label>
+      <textarea id="outputField" rows="6" readonly></textarea>
+      <button id="copyBtn">Copy to Clipboard</button>
+    </div>
+    <div class="sidebar">
+      <h3>Options</h3>
+      <label for="powerName">Power Function Name:</label>
+      <input type="text" id="powerName" value="POWER">
+      <label for="sqrtName">Square Root Function Name:</label>
+      <input type="text" id="sqrtName" value="SQRT">
+    </div>
+  </div>
+  <script>
+    function findMatching(s, start, openChar, closeChar) {
+      let count = 0;
+      for (let i = start; i < s.length; i++) {
+        if (s[i] === openChar) count++;
+        else if (s[i] === closeChar) {
+          count--;
+          if (count === 0) return i;
+        }
+      }
+      return -1;
+    }
+    function removeOuterParentheses(expr) {
+      expr = expr.trim();
+      if (expr.startsWith('(') && expr.endsWith(')')) {
+        if (findMatching(expr, 0, '(', ')') === expr.length - 1)
+          return removeOuterParentheses(expr.slice(1, -1));
+      }
+      return expr;
+    }
+    function simpleToken(token) {
+      token = token.trim();
+      return /^[0-9.]+$/.test(token) || /^[a-zA-Z]+$/.test(token);
+    }
+    function processFrac(s) {
+      let pattern = /\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/;
+      while (pattern.test(s)) {
+        s = s.replace(pattern, function(match, num, den) {
+          num = removeOuterParentheses(num.trim());
+          den = removeOuterParentheses(den.trim());
+          if (!simpleToken(num)) num = '(' + num + ')';
+          if (!simpleToken(den)) den = '(' + den + ')';
+          return num + '/' + den;
+        });
+      }
+      return s;
+    }
+    function processPower(s, powerName) {
+      while (s.indexOf('^{') !== -1) {
+        let idx = s.indexOf('^{');
+        let baseEnd = idx;
+        let baseStart;
+        if (baseEnd > 0 && s[baseEnd - 1] === ')') {
+          let j = baseEnd - 1, count = 0;
+          while (j >= 0) {
+            if (s[j] === ')') count++;
+            else if (s[j] === '(') {
+              count--;
+              if (count === 0) break;
+            }
+            j--;
+          }
+          baseStart = j;
+        } else {
+          let j = baseEnd - 1;
+          while (j >= 0 && /[a-zA-Z0-9._/]/.test(s[j])) j--;
+          baseStart = j + 1;
+        }
+        let base = removeOuterParentheses(s.slice(baseStart, baseEnd));
+        let expStart = idx + 2;
+        let expEnd = findMatching(s, idx + 1, '{', '}');
+        if (expEnd === -1) break;
+        let exponent = s.slice(expStart, expEnd).trim();
+        let replacement = powerName + '(' + base + ',' + exponent + ')';
+        s = s.slice(0, baseStart) + replacement + s.slice(expEnd + 1);
+      }
+      return s;
+    }
+    function processSqrt(s, sqrtName) {
+      while (s.indexOf('\\sqrt{') !== -1) {
+        let idx = s.indexOf('\\sqrt{');
+        let contentStart = idx + '\\sqrt{'.length;
+        let contentEnd = findMatching(s, contentStart - 1, '{', '}');
+        if (contentEnd === -1) break;
+        let content = s.slice(contentStart, contentEnd).trim();
+        let replacement = sqrtName + '(' + content + ')';
+        s = s.slice(0, idx) + replacement + s.slice(contentEnd + 1);
+      }
+      return s;
+    }
+    function latexToFormula(latex, powerName, sqrtName) {
+      let s = latex.replace(/\\cdot/g, '*')
+                   .replace(/\\left/g, '')
+                   .replace(/\\right/g, '');
+      s = processFrac(s);
+      s = processPower(s, powerName);
+      s = processSqrt(s, sqrtName);
+      return s;
+    }
+    document.getElementById('convertBtn').addEventListener('click', function() {
+      let inputText = document.getElementById('latexInput').value.trim();
+      let powerName = document.getElementById('powerName').value || "POWER";
+      let sqrtName = document.getElementById('sqrtName').value || "SQRT";
+      let outputText = latexToFormula(inputText, powerName, sqrtName);
+      document.getElementById('outputField').value = outputText;
+    });
+    document.getElementById('copyBtn').addEventListener('click', function() {
+      let outputText = document.getElementById('outputField').value;
+      navigator.clipboard.writeText(outputText);
+    });
+  </script>
+</body>
+</html>
